@@ -79,7 +79,7 @@ class Pet:
         return int(self.key_state & KeyState.RIGHT.value > 0)-int(self.key_state & KeyState.LEFT.value > 0)
 
 class Main(QLabel):
-    positionChanged = Signal()  # 新增信号
+    positionChanged = Signal()  
     
     def __init__(self):
         super().__init__()
