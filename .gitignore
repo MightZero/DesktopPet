@@ -2,9 +2,3 @@
 .venv
 venv
 __pycache__
-
-images/idle/*
-images/dragging/*
-images/jump_up/*
-images/jump_down/*
-images/run/*
