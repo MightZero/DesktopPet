@@ -1,58 +1,59 @@
 from enum import IntFlag
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QGraphicsDropShadowEffect
 from PySide6.QtGui import QPixmap, QTransform
-from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtCore import Qt, QPoint, QTimer, QPropertyAnimation, Signal
 import sys
 import os
-from util import State, KeyState
+from util import State, KeyState, eps
 from images import ImageSet
-from position import  Position
+from position import Position
+from config import Config
+from dialog import Dialog
+import random
 
-class State(IntFlag):
-    IDLE = 1
-    RUN = 2
-    JUMP_UP = 4
-    JUMP_DOWN = 8
-    DRAGGING = 16
+
+config=Config()
+
 
 class Pet:
 
-    def __init__(self, scale_factor, animation_speed):
-        self.scale_factor = scale_factor
-        self.animation_speed = animation_speed
+    def __init__(self):
+        self.scale_factor = config.get_setting("scale_factor")
 
-        self.idle_frames = ImageSet("images/idle", scale_factor)
-        self.run_frames = ImageSet("images/run", scale_factor)
-        self.jump_up_frames = ImageSet("images/jump_up", scale_factor)
-        self.jump_down_frames = ImageSet("images/jump_down", scale_factor)
-        self.dragging_frames = ImageSet("images/dragging", scale_factor)
+        self.idle_frames = ImageSet("images/idle", self.scale_factor)
+        self.run_frames = ImageSet("images/run", self.scale_factor)
+        self.jump_up_frames = ImageSet("images/jump_up", self.scale_factor)
+        self.jump_down_frames = ImageSet("images/jump_down", self.scale_factor)
+        self.dragging_frames = ImageSet("images/dragging", self.scale_factor)
 
+        self.position = Position()
         self.state = State.IDLE.value
         self.key_state = 0
         self.is_grounded = True
+        self.is_dragging = False
+        self.is_pressing = False
 
-    def update_state(self, position, is_dragging=False):
-        if is_dragging:
+    def update_state(self):
+        if self.is_dragging:
             self.state = State.DRAGGING.value
             return
 
         if self.key_state & KeyState.UP.value and self.is_grounded:
-            position.jump()
+            self.position.jump()
             self.is_grounded = False
 
         if not self.is_grounded:
-            self.state = State.JUMP_DOWN.value if position.velocity_y > 0 else State.JUMP_UP.value
+            self.state = State.JUMP_DOWN.value if self.position.velocity.y > 0 else State.JUMP_UP.value
         else:
-            if abs(position.velocity_x) > 2:
+            if self.get_way()!=0:
                 self.state = State.RUN.value
             else:
                 self.state = State.IDLE.value
+                
+        if self.position.velocity.x > eps:
+            self.position.facing = 1 if self.position.velocity.x > 0 else -1
 
-        if position.velocity_x != 0:
-            position.facing = 1 if position.velocity_x > 0 else -1
-
-    def get_current_pixmap(self, facing):
-        
+    def get_current_pixmap(self):
         if self.state & State.DRAGGING.value:
             frames = self.dragging_frames
         elif self.state & State.JUMP_UP.value:
@@ -65,25 +66,37 @@ class Pet:
             frames = self.idle_frames
 
         pixmap = frames.get_next_image()
-        return pixmap.transformed(QTransform().scale(facing, 1))
+        return pixmap.transformed(QTransform().scale(self.position.facing, 1))
+
+    def get_position(self):
+        self.position.set_acceleration(self.get_way())
+        self.position.apply_physics()
+        self.is_grounded = self.position.is_grounded()
+        
+        return [self.position.position.x, self.position.position.y]
+
+    def get_way(self):
+        return int(self.key_state & KeyState.RIGHT.value > 0)-int(self.key_state & KeyState.LEFT.value > 0)
 
 class Main(QLabel):
-
-    def __init__(self, scale_factor=1.0, animation_speed=100):
+    positionChanged = Signal()  # 新增信号
+    
+    def __init__(self):
         super().__init__()
-        self.scale_factor = scale_factor
         self.initUI()
+        self.animation_speed = config.get_setting("animation_tps")
+        self.physics_speed = config.get_setting("position_tps")
+        self.pet = Pet()
 
-        self.position = Position(scale_factor)
-        self.pet = Pet(scale_factor, animation_speed)
-
-        self.physics_timer = QTimer(self)
-        self.physics_timer.timeout.connect(self.update_physics)
-        self.physics_timer.start(16)
+        self.position_timer = QTimer(self)
+        self.position_timer.timeout.connect(self.update_position)
+        self.position_timer.start(1000.0 / self.physics_speed)
 
         self.animation_timer = QTimer(self)
         self.animation_timer.timeout.connect(self.update_animation)
-        self.animation_timer.start(animation_speed)
+        self.animation_timer.start(1000.0 / self.animation_speed)
+        
+        self.hasDialog = False
 
     def initUI(self):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -92,57 +105,49 @@ class Main(QLabel):
         self.drag_position = QPoint()
         self.setFocusPolicy(Qt.StrongFocus)
 
-    def update_physics(self):
-        
+    def update_position(self):
         screen = QApplication.primaryScreen().availableGeometry()
-        self.position.update_screen_params(
+        self.pet.position.update_screen_params(
             (self.width(), self.height()),
             (screen.width(), screen.height())
         )
-
-        left = self.pet.key_state & KeyState.LEFT.value
-        right = self.pet.key_state & KeyState.RIGHT.value
-
-        if left and not right:
-            self.position.velocity_x = max(
-                -self.position.max_speed,
-                self.position.velocity_x - self.position.acceleration
-            )
-        elif right and not left:
-            self.position.velocity_x = min(
-                self.position.max_speed,
-                self.position.velocity_x + self.position.acceleration
-            )
-
-        self.pet.is_grounded = self.position.apply_physics()
-        self.move(self.position.x, self.position.y)
-
+        new_x, new_y = self.pet.get_position()
+        self.move(new_x, new_y)
+        self.positionChanged.emit()
     def update_animation(self):
-        self.pet.update_state(self.position, self.dragging)
-        pixmap = self.pet.get_current_pixmap(self.position.facing)
+        self.pet.update_state()
+        pixmap = self.pet.get_current_pixmap()
         self.setPixmap(pixmap)
         self.setFixedSize(pixmap.size())
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.dragging = True
-            self.physics_timer.stop()
+            self.pet.is_pressing = True
             self.drag_position = event.globalPos() - self.pos()
         elif event.button() == Qt.RightButton:
             self.close()
+            exit(0)
 
     def mouseMoveEvent(self, event):
-        if self.dragging:
+        if self.pet.is_pressing:
+            self.pet.is_dragging = True
+            self.position_timer.stop()
+        if self.pet.is_dragging:
             screen = QApplication.primaryScreen().availableGeometry()
             new_pos = event.globalPos() - self.drag_position
             new_x = max(-0.2 * self.width(), min(new_pos.x(), screen.width() - 0.8 * self.width()))
             new_y = max(-0.2 * self.height(), min(new_pos.y(), screen.height() - 0.8 * self.height()))
-            self.position.x, self.position.y = new_x, new_y
+            self.pet.position.force_move(new_x, new_y)
             self.move(new_x, new_y)
+            self.positionChanged.emit()
 
     def mouseReleaseEvent(self, event):
-        self.dragging = False
-        self.physics_timer.start()
+        if event.button() == Qt.LeftButton:
+            self.pet.is_pressing = False
+            if not self.hasDialog and not self.pet.is_dragging:
+                Dialog(random.choice(config.get_setting("messages")), self)
+            self.pet.is_dragging = False
+            self.position_timer.start()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Left:
@@ -165,6 +170,6 @@ if __name__ == "__main__":
         sys.stderr.write("Warning: Detected Wayland")
         os.environ['QT_QPA_PLATFORM'] = 'xcb'
     app = QApplication(sys.argv)
-    pet_window = Main(scale_factor=0.2)
+    pet_window = Main()
     pet_window.show()
     sys.exit(app.exec())

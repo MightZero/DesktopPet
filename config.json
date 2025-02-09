@@ -1,0 +1,21 @@
+{
+    "scale_factor" : 0.5,
+    "position_tps" : 60,
+    "animation_tps" : 12,
+
+    "ground_offset" : 20,
+
+    "physics": {
+        "gravity" : 1.5,
+        "friction" : 0.15,
+        "air_resistance" : 0.05,
+        "jump_force": 60,
+        "acceleration": 3.5
+    },
+
+    "messages": [
+        "你好啊",
+        "Hi~",
+        "今天天气怎么样？"
+    ]
+}
