@@ -1,4 +1,5 @@
 from enum import IntFlag
+import math
 
 
 class State(IntFlag):

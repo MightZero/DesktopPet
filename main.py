@@ -1,10 +1,10 @@
-from enum import IntFlag
-from PySide6.QtWidgets import QApplication, QLabel, QGraphicsDropShadowEffect
-from PySide6.QtGui import QPixmap, QTransform
-from PySide6.QtCore import Qt, QPoint, QTimer, QPropertyAnimation, Signal
+import math
+from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtGui import QTransform
+from PySide6.QtCore import Qt, QPoint, QTimer, Signal, QTime
 import sys
 import os
-from util import State, KeyState, eps
+from util import State, KeyState, Vector2D, eps
 from images import ImageSet
 from position import Position
 from config import Config
@@ -31,7 +31,6 @@ class Pet:
         self.key_state = 0
         self.is_grounded = True
         self.is_dragging = False
-        self.is_pressing = False
 
     def update_state(self):
         if self.is_dragging:
@@ -97,6 +96,10 @@ class Main(QLabel):
         self.animation_timer.start(1000.0 / self.animation_speed)
         
         self.hasDialog = False
+        
+        self.drag_last_pos = None
+        self.drag_last_time = None
+        self.current_velocity = Vector2D(0, 0)
 
     def initUI(self):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -124,6 +127,9 @@ class Main(QLabel):
         if event.button() == Qt.LeftButton:
             self.pet.is_pressing = True
             self.drag_position = event.globalPos() - self.pos()
+            self.drag_last_pos = event.globalPos()
+            self.drag_last_time = QTime.currentTime().msecsSinceStartOfDay()
+            self.current_velocity = Vector2D(0, 0)
         elif event.button() == Qt.RightButton:
             self.close()
             exit(0)
@@ -133,8 +139,22 @@ class Main(QLabel):
             self.pet.is_dragging = True
             self.position_timer.stop()
         if self.pet.is_dragging:
+            current_pos = event.globalPos()
+            current_time = QTime.currentTime().msecsSinceStartOfDay()
+            if self.drag_last_time is not None:
+                delta_time = current_time - self.drag_last_time
+                if delta_time == 0:
+                    delta_time = 1 
+                delta_x = current_pos.x() - self.drag_last_pos.x()
+                delta_y = current_pos.y() - self.drag_last_pos.y()
+                velocity_x = (delta_x / delta_time) * 1000
+                velocity_y = (delta_y / delta_time) * 1000
+                self.current_velocity = Vector2D(velocity_x, velocity_y)
+            self.drag_last_time = current_time
+            self.drag_last_pos = current_pos
+
             screen = QApplication.primaryScreen().availableGeometry()
-            new_pos = event.globalPos() - self.drag_position
+            new_pos = current_pos - self.drag_position
             new_x = max(-0.2 * self.width(), min(new_pos.x(), screen.width() - 0.8 * self.width()))
             new_y = max(-0.2 * self.height(), min(new_pos.y(), screen.height() - 0.8 * self.height()))
             self.pet.position.force_move(new_x, new_y)
@@ -147,6 +167,12 @@ class Main(QLabel):
             if not self.hasDialog and not self.pet.is_dragging:
                 Dialog(random.choice(config.get_setting("messages")), self)
             self.pet.is_dragging = False
+            if self.physics_speed > 0:
+                scaled_velocity = Vector2D(
+                    self.current_velocity.x / self.physics_speed,
+                    self.current_velocity.y / self.physics_speed
+                )
+                self.pet.position.set_velocity(scaled_velocity .normalize() * math.pow(scaled_velocity.magnitude(),0.6))
             self.position_timer.start()
 
     def keyPressEvent(self, event):

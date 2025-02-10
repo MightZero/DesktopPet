@@ -1,14 +1,5 @@
-
-from enum import IntFlag
 from PySide6.QtWidgets import QApplication, QLabel, QGraphicsDropShadowEffect
-from PySide6.QtGui import QPixmap, QTransform
-from PySide6.QtCore import Qt, QPoint, QTimer, QPropertyAnimation, Signal
-import sys
-import os
-from util import State, KeyState, eps
-from images import ImageSet
-from position import Position
-from config import Config
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation
 
 class Dialog(QLabel):
     def __init__(self, text, parent=None):
@@ -25,26 +16,6 @@ class Dialog(QLabel):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
 
-        
-        self.setStyleSheet("""
-            FadingDialog {
-                background: rgba(40, 40, 40, 220);
-                border-radius: 8px;
-                padding: 12px 20px;
-                color: 
-                font-family: Microsoft YaHei;
-                font-size: 14px;
-                min-width: 120px;
-                qproperty-alignment: AlignCenter;
-            }
-            FadingDialog::shadow {
-                padding: 10px;
-                background: rgba(0, 0, 0, 50);
-                border-radius: 12px;
-            }
-        """)
-
-        
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(12)
         shadow.setColor(Qt.black)

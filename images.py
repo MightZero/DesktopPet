@@ -1,7 +1,5 @@
-from PySide6.QtWidgets import QApplication, QLabel
-from PySide6.QtGui import QPixmap, QTransform
-from PySide6.QtCore import Qt, QPoint, QTimer, QEvent
-import sys
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt
 import os
 
 class ImageSet:

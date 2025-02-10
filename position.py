@@ -28,31 +28,23 @@ class Position:
         self.screen_width, self.screen_height = screen_size
         self.ground_y = screen_size[1] - window_height + config.get_setting("ground_offset")
     def apply_physics(self):
-
         self.velocity += self.gravity
         self.velocity.y += self.acceleration.y
-        
         if self.is_grounded():
             self.velocity -= self.velocity * self.friction
             self.velocity.x += self.acceleration.x
         else:
             self.velocity -= self.velocity * self.air_resistance
             self.velocity.x += self.acceleration.x * self.air_resistance
-            
-
         self.position += self.velocity * self.tps_factor
-
         self.position.x = max(-0.2 * self.window_width, self.position.x)
         self.position.x = min(self.position.x, self.screen_width - 0.8 * self.window_width)
-
         if self.position.y >= self.ground_y:
             self.position.y = self.ground_y
             self.velocity.y = 0
-
         if self.velocity.x != 0:
             self.facing = 1 if self.velocity.x > 0 else -1
     def force_move(self, new_x, new_y):
-        self.velocity = Vector2D(0, 0)
         self.position = Vector2D(new_x, new_y)
     def jump(self):
         if self.is_grounded():
@@ -68,5 +60,7 @@ class Position:
             self.acceleration.x = self.max_acceleration
         else:
             self.acceleration.x = 0
+    def set_velocity(self, velocity):
+        self.velocity = velocity
     def velocity_magnitude(self):
         return self.velocity.magnitude()
